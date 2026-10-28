@@ -46,7 +46,20 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
         n_homings - how many homings to average
     output: estimated delta_theta_sys at home, np.ndarray of 6
     """
-    raise NotImplementedError("TODO: implement measure_home_offsets")
+    offset_sum = np.zeros(6)
+
+    # each homing places the actual robot at theta* = 0 and returns the encoder value measured at that physical zero
+    for _ in range(n_homings):
+        encoder_value = rob.home_robot()
+        offset_sum += encoder_value
+
+    # we average repeated homings to reduce zero-mean random joint error
+    mean_encoder_at_home = offset_sum / n_homings
+    
+    # at home: theta_encoder = -delta_theta_sys - delta_theta_rnd
+    # so after averaging, delta_theta_sys ~= -mean(theta_encoder)
+    delta_theta_sys = -mean_encoder_at_home
+    return delta_theta_sys
 
 
 # this should contain a desired accuracy which will affect the number of calibration poses
@@ -80,6 +93,8 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
         kwargs - whatever your design needs (grid sizes, margins, ...)
     output: ordered List of joint vectors (np.ndarray of 6)
     """
+
+
     raise NotImplementedError("TODO: implement plan_calibration_poses")
 
 

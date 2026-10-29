@@ -13,7 +13,8 @@ from data_types.nominal_types import vct3, Frame
 from ..robot import Robot
 from assignments.assignment1.src.tracker import Tracker
 from ..simulation import PlacedBody
-
+from ..simulation.tracker import (sample_marker_bodies)
+from ..student.registration import (average_frames)
 
 @dataclass
 class CalibrationData:
@@ -56,11 +57,38 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     # we average repeated homings to reduce zero-mean random joint error
     mean_encoder_at_home = offset_sum / n_homings
     
-    # at home: theta_encoder = -delta_theta_sys - delta_theta_rnd
+    # at home theta_encoder* = 0 so theta_encoder = -delta_theta_sys - delta_theta_rnd
     # so after averaging, delta_theta_sys ~= -mean(theta_encoder)
     delta_theta_sys = -mean_encoder_at_home
     return delta_theta_sys
 
+def append_joint_sweep(poses, joint_index, joint_min, joint_max, spacing, rob, trk, mbee_local_positions):
+
+    # iterations w.r.t range and spacing making sure spacing is never exceeded
+    for i in range(int(np.ceil((joint_max - joint_min) / spacing)) + 1):
+
+        displacement = min(spacing * i, joint_max - joint_min)
+
+        # we move only the selected joint so we make all other theta values 0 for simplicity and so we limit other sources of error
+        theta = np.zeros(6)
+        theta[joint_index] = joint_min + displacement
+
+        # We get the end effector location to use later to see if all markers attached to it are visible
+        # for this we use the forward kinematics function we make in kinematics.py to predict the end-effector frame using the theta values we just set
+        F_ee_workspace = rob.F_rob * rob.fwd_kins(theta)
+
+        # Here we loop through all calibration markers and make sure every each one is visible
+        visible = True
+        for marker in mbee_local_positions:
+            marker_workspace = F_ee_workspace * marker
+            if not trk.is_visible(marker_workspace):
+                visible = False
+                break
+        if visible:
+            poses.append(theta)
+
+    # return to home after finishing this joint sweep
+    poses.append(np.zeros(6))
 
 # this should contain a desired accuracy which will affect the number of calibration poses
 def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[vct3], desired_accuracy: float, **kwargs) -> List[np.ndarray]:
@@ -93,9 +121,36 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
         kwargs - whatever your design needs (grid sizes, margins, ...)
     output: ordered List of joint vectors (np.ndarray of 6)
     """
+    poses = []
 
+    spacing_mm = ...
+    spacing_rad = ...
 
-    raise NotImplementedError("TODO: implement plan_calibration_poses")
+    home = np.zeros(6)
+    poses.append(home.copy())
+
+    # TRANSLATIONAL JOINTS
+    # theta 1
+    append_joint_sweep(poses=poses, joint_index=0, joint_min=0, joint_max=600, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    # theta 2
+    append_joint_sweep(poses=poses, joint_index=1, joint_min=-300, joint_max=300, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    # theta 3
+    append_joint_sweep(poses=poses, joint_index=2, joint_min=0, joint_max=600, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    # ROTATIONAL JOINTS
+
+    # theta 4
+    append_joint_sweep(poses=poses, joint_index=3, joint_min=-0.75*np.pi, joint_max=0.75*np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    # theta 5
+    append_joint_sweep(poses=poses, joint_index=4, joint_min=-0.75*np.pi, joint_max=0.75*np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    # theta 6
+    append_joint_sweep(poses=poses, joint_index=5, joint_min=-np.pi, joint_max=np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
+
+    return poses
 
 
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
@@ -116,8 +171,51 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
         repeats - readings per pose
     output: CalibrationData
     """
-    raise NotImplementedError("TODO: implement collect_calibration_data")
 
+    data = CalibrationData()
+
+    for theta in thetas:
+
+        # command the robot to the selected calibration pose
+        dt = rob.move_joints(theta)
+        data.t_collect += dt
+
+        observed_frames = []
+
+        # take repeated tracker readings at the same physical robot pose
+        for repeat in range(repeats):
+            # We already checked if marker would be visible to tracker in the plan_calibration_poses function 
+            # BUT that was a prediction and in this case we're actually moving the robot so the tracker will tell us in real time if the mariker is actually visible
+            # the prediction helped us limit the poses we do if we can predict that it's not visible but if we can't then we'll have to check again to make sure
+            sample_marker_bodies(trk)
+
+            # each tracker sample costs 0.03 s
+            data.t_collect += 0.03 #constants.SAMPLE_DELTA_T_SEC
+
+            # get the most recent measured frame of the calibration body which was stored in sample_marker_bodies fct
+            F_ee = mbee_placed.observed_frame
+            # None means the calibration body was not visible
+            if F_ee is not None:
+                # store the joint vector for thetas and the measured EE frame for frames entry of data
+                data.thetas.append(theta.copy())
+                data.frames.append(F_ee)
+                # observed_frames.append(F_ee)
+                break
+
+        # # if every reading failed, skip this calibration pose
+        # if len(observed_frames) != 0:
+        #     #if length = 1 (only observation) no need to average 
+        #     if len(observed_frames) == 1:
+        #         F_ee_avg = observed_frames[0]
+        #     # average repeated noisy tracker observations
+        #     else:
+        #         F_ee_avg = average_frames(observed_frames)
+
+        #     # store the joint vector for thetas and the measured EE frame for frames entry of data
+        #     data.thetas.append(theta.copy())
+        #     data.frames.append(F_ee_avg)
+
+    return data
 
 def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
     """
@@ -134,4 +232,27 @@ def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
             ImprovedKinematics)
     output: F_X
     """
+
+    if len(data) == 0:
+        raise ValueError("No calibration data available")
+
+    F_X_estimates = []
+
+    # each calibration sample gives us one estimate of the base frame
+    for theta, F_ee_measured in zip(data.thetas, data.frames):
+
+        # end effector pose predicted relative to the robot base
+        F_ee_robot = kins.fwd_kins(theta)
+
+        # F_ee_measured = F_X * F_ee_robot
+        # so F_X = F_ee_measured * inv(F_ee_robot)
+        F_X = F_ee_measured * F_ee_robot.inv()
+
+        F_X_estimates.append(F_X)
+
+    # all samples estimate the same base frame, so average them
+    F_X_avg = average_frames(F_X_estimates)
+
+    return F_X_avg
+    
     raise NotImplementedError("TODO: implement estimate_base_frame")

@@ -79,12 +79,13 @@ def append_joint_sweep(poses, joint_index, joint_min, joint_max, spacing, rob, t
 
         # Here we loop through all calibration markers and make sure every each one is visible
         visible = True
+        marker_workspace_positions = []
+
         for marker in mbee_local_positions:
             marker_workspace = F_ee_workspace * marker
-            if not trk.is_visible(marker_workspace):
-                visible = False
-                break
-        if visible:
+            marker_workspace_positions.append(marker_workspace)
+
+        if trk.is_visible(marker_workspace_positions):
             poses.append(theta)
 
     # return to home after finishing this joint sweep
@@ -123,8 +124,8 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     """
     poses = []
 
-    spacing_mm = ...
-    spacing_rad = ...
+    spacing_mm = 100
+    spacing_rad = 0.5
 
     home = np.zeros(6)
     poses.append(home.copy())
@@ -193,7 +194,7 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
             data.t_collect += 0.03 #constants.SAMPLE_DELTA_T_SEC
 
             # get the most recent measured frame of the calibration body which was stored in sample_marker_bodies fct
-            F_ee = mbee_placed.observed_frame
+            F_ee = mbee_placed.body.observed_frame
             # None means the calibration body was not visible
             if F_ee is not None:
                 # store the joint vector for thetas and the measured EE frame for frames entry of data

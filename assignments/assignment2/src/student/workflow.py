@@ -198,23 +198,23 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
             # None means the calibration body was not visible
             if F_ee is not None:
                 # store the joint vector for thetas and the measured EE frame for frames entry of data
-                data.thetas.append(theta.copy())
-                data.frames.append(F_ee)
-                # observed_frames.append(F_ee)
-                break
+                # data.thetas.append(theta.copy())
+                # data.frames.append(F_ee)
+                observed_frames.append(F_ee)
+                #break
 
-        # # if every reading failed, skip this calibration pose
-        # if len(observed_frames) != 0:
-        #     #if length = 1 (only observation) no need to average 
-        #     if len(observed_frames) == 1:
-        #         F_ee_avg = observed_frames[0]
-        #     # average repeated noisy tracker observations
-        #     else:
-        #         F_ee_avg = average_frames(observed_frames)
+        # if every reading failed, skip this calibration pose
+        if len(observed_frames) != 0:
+            #if length = 1 (only observation) no need to average 
+            if len(observed_frames) == 1:
+                F_ee_avg = observed_frames[0]
+            # average repeated noisy tracker observations
+            else:
+                F_ee_avg = average_frames(observed_frames)
 
-        #     # store the joint vector for thetas and the measured EE frame for frames entry of data
-        #     data.thetas.append(theta.copy())
-        #     data.frames.append(F_ee_avg)
+            # store the joint vector for thetas and the measured EE frame for frames entry of data
+            data.thetas.append(theta.copy())
+            data.frames.append(F_ee_avg)
 
     return data
 

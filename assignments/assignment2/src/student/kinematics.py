@@ -116,7 +116,7 @@ class ImprovedKinematics(Robot):
         # we build rotation vectors by combining tilt components and setting rotation axis to 0 to use to determine real axis di_real
         # note: d1 is fixed by model BUT for every other axis we only need 2 rotation components bcs rotation about axis itself doesn't change its direction.
         # then we find real axis di_real by converting rotation vector into rotation matrix and matrix multiplying it with nominal axis di
-        phi2 = np.array([tilts[0].tilt_1, 0.0, tilts[0].tilt_2])   # nominal y -> x/z tilt
+        phi2 = np.array([0.0, 0.0, tilts[0].tilt_2])   # nominal y -> x/z tilt
         d2_real = exp_so3(phi2) @ dy                # d2 = dy  
         phi3 = np.array([tilts[1].tilt_1, tilts[1].tilt_2, 0.0])   # nominal z -> x/y tilt
         d3_real = exp_so3(phi3) @ dz                # d3 = dz   
@@ -149,6 +149,7 @@ class ImprovedKinematics(Robot):
         #delta_theta_k,sys = offset_k + sum_j c_k,j (theta_k / scale_k)^j
         theta = np.asarray(theta, dtype=np.float64).reshape(6)
         theta_real = theta.copy()
+        #bounds are already stored in theta_min and theta_max attribute of robot which this class inherits
         joint_scales = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max))
 
         for k in range(6):
@@ -281,6 +282,8 @@ class ImprovedKinematics(Robot):
             T[:3, :3] = delta_F_ee.R.matrix
             T[:3, 3] = delta_F_ee.p.vec.ravel()
             eta = log_se3(T)
+            eta[:3] *= 100.0   # rad -> roughly mm scale (0.1 mm noise / 1e-3 rad noise)
+
             # eta = log_se3(delta_F_ee)
 
             #append to residuals vector 

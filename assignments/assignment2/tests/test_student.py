@@ -222,27 +222,12 @@ def test_fit_recovers_synthetic_parameters():
             else:
                 original_params_kinematics.params[param] = rng.uniform(-1e-5, 1e-5)
 
-<<<<<<< HEAD
-    # 2. Choose known, nonzero calibration parameters.
-    generator.params[7] = 0.005      # Joint 2 axis tilt (rad)
-    generator.params[22] = 0.04      # Joint 1 encoder correction (mm)
-    generator.params[28] = 0.002     # Joint 4 encoder correction (rad)
-    generator.params[19] = 0.10      # Tool-frame translation (mm)
-
-    # 3. Construct synthetic calibration data.
-    data = workflow.CalibrationData()
-
-    for _ in range(60):
-        theta = random_theta(rng)
-        observed_frame = generator.predict_in_tracker(theta)
-=======
     calibration_data = workflow.CalibrationData()  # using new parameters to generate synthetic calibration data
     for _ in range(N_CALIBRATION_POSES):
         theta = random_theta(rng)
         observed_frame = original_params_kinematics.predict_in_tracker(theta, original_params_kinematics.params)
         calibration_data.thetas.append(theta.copy())
         calibration_data.frames.append(observed_frame)
->>>>>>> 7f2af672833b87e14be6b2febf088dbe94686824
 
     blind = kinematics.ImprovedKinematics(rob, Frame.eye()) # the blind model we will fit to the data, starting from zero parameters
     result = blind.fit(calibration_data)
@@ -254,21 +239,4 @@ def test_fit_recovers_synthetic_parameters():
         assert angle_error < 1e-5
         assert position_error < 1e-3
 
-<<<<<<< HEAD
-    result = fitted.fit(data) #recover corrections with fit function
-
-    # 6. Test fitted model on NEW joint configurations.
-    for _ in range(20):
-        theta = random_theta(rng)
-
-        expected = generator.predict_in_tracker(theta)
-        predicted = fitted.predict_in_tracker(theta)
-
-        angle, position = metrics.frame_error(expected, predicted)
-
-        assert angle < 1e-5
-        assert position < 1e-3
-=======
-
->>>>>>> 7f2af672833b87e14be6b2febf088dbe94686824
 

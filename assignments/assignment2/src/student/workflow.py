@@ -120,7 +120,7 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     poses = []
 
     spacing_mm = 100
-    spacing_rad = 0.5
+    spacing_rad = 0.5 #0.005
 
     home = np.zeros(6)
     poses.append(home.copy())

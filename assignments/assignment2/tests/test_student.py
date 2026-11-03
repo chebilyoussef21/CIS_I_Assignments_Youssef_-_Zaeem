@@ -109,6 +109,7 @@ def test_estimate_base_frame_on_synthetic_data():
 
 def test_planned_poses_are_visible_and_within_limits():
     """TODO: write this test for your plan_calibration_poses."""
+
     pytest.skip("TODO")
 
 
@@ -158,4 +159,49 @@ def test_fit_recovers_synthetic_parameters():
     the parameters themselves need not match if your model has a null
     direction -- compare poses, not parameters.
     """
-    pytest.skip("TODO")
+    rng = np.random.default_rng(42)
+
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+
+    # 1. Define a model that generates our synthetic observations.
+    generator = kinematics.ImprovedKinematics(rob, Frame.eye())
+
+    # 2. Choose known, nonzero calibration parameters.
+    true_params = generator.initial_params()
+    true_params[7] = 0.005      # Joint 2 axis tilt (rad)
+    true_params[22] = 0.04      # Joint 1 encoder correction (mm)
+    true_params[28] = 0.002     # Joint 4 encoder correction (rad)
+    true_params[19] = 0.10      # Tool-frame translation (mm)
+
+    # 3. Construct synthetic calibration data.
+    data = workflow.CalibrationData()
+
+    for _ in range(60):
+        theta = random_theta(rng)
+        observed_frame = generator.predict_in_tracker(
+            theta, true_params
+        )
+
+        data.thetas.append(theta.copy())
+        data.frames.append(observed_frame)
+
+    # 4. Initialize a different model with zero corrections.
+    fitted = kinematics.ImprovedKinematics(rob, Frame.eye())
+
+    # 5. Ask least squares to recover the corrections.
+    result = fitted.fit(data)
+
+    # 6. Test the fitted model on NEW joint configurations.
+    for _ in range(20):
+        theta = random_theta(rng)
+
+        expected = generator.predict_in_tracker(
+            theta, true_params
+        )
+        predicted = fitted.predict_in_tracker(theta)
+
+        angle, position = metrics.frame_error(expected, predicted)
+
+        assert angle < 1e-5
+        assert position < 1e-3
+

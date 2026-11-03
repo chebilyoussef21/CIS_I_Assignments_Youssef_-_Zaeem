@@ -148,7 +148,7 @@ def test_planned_poses_are_visible_and_within_limits():
         assert rob.within_limits(p)
         F_tool = rob.fwd_kins(p)
         marker_positions = [F_tool * m for m in mbee_local_positions]
-    assert trk.is_visible(marker_positions)
+        assert trk.is_visible(marker_positions)
 
 
 def test_measure_home_offsets_matches_encoders():
@@ -237,3 +237,24 @@ def test_fit_recovers_synthetic_parameters():
         assert position_error < 1e-3
 
 
+def test_gauge_fixing_does_not_change_predictions():
+    rng = np.random.default_rng(0)
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    original_params_kinematics = kinematics.ImprovedKinematics(rob, Frame.eye())
+    random_theta = np.array([rng.uniform(0, 600), rng.uniform(-300, 300), rng.uniform(0, 600), rng.uniform(-1.3, 1.3), rng.uniform(-1.3, 1.3), rng.uniform(-2.5, 2.5)]) # ensure chosen unifrrom ranges are within correct bounds
+    original_frame = original_params_kinematics.predict_in_tracker(random_theta)
+    changed_params = original_params_kinematics.params.copy()
+    changed_params[6] = 0.5 # essentially swapping the zero parameter back to a real valued one
+    changed_frame = original_params_kinematics.predict_in_tracker(random_theta, changed_params) # recalculate the frame to compare
+    # The frames should be the same since the unused parameter doesn't affect the prediction
+    assert np.allclose(original_frame.R.matrix, changed_frame.R.matrix, atol=1e-9)
+    assert np.allclose(original_frame.p.vec, changed_frame.p.vec, atol=1e-9)
+
+def test_joint_offset():
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    testing_joint_offsets = np.array([0.1, -0.2, 0.3, 0,0, 0])
+    kinematics_model = kinematics.ImprovedKinematics(rob, Frame.eye(), joint_offsets=testing_joint_offsets)
+    rob_foward_kinematics_result = rob.fwd_kins(np.array([0, 0, 0, 0, 0, 0]))
+    kinematics_model_foward_kinematics_result = kinematics_model.fwd_kins(np.array([0, 0, 0, 0, 0, 0]))
+    nominal_diff =  (kinematics_model_foward_kinematics_result.p.vec - rob_foward_kinematics_result.p.vec).reshape(-1)
+    assert np.allclose(nominal_diff, testing_joint_offsets[:3], atol=1e-9)

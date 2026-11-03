@@ -15,8 +15,6 @@ from ..simulation import PlacedBody, sample_marker_bodies, most_recent_observed_
 
 def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     """
-    TODO: implement (your own -- do not call the simulator's solver).
-
     Rigid point-set registration: find the least-squares Frame F such that
     F * a[i] ~= b[i] for every corresponding pair. Think about what happens
     with fewer than 3 points, with collinear points, and with a reflection.
@@ -67,8 +65,6 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
 
 def average_frames(frames: List[Frame]) -> Frame:
     """
-    TODO: implement.
-
     Average of several noisy estimates of the same Frame. Rotations cannot
     simply be averaged element-wise -- the result must be a proper
     rotation matrix.
@@ -106,8 +102,6 @@ def average_frames(frames: List[Frame]) -> Frame:
 
 def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -> List[vct3]:
     """
-    TODO: implement.
-
     "It is possible to improve your estimate of a_m,k through a calibration
     process involving multiple observations of the marker body using the
     tracking camera and then averaging them."

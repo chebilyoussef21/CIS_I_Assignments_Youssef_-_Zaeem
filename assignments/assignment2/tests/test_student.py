@@ -80,8 +80,7 @@ def test_average_frames_is_a_proper_rotation():
 
 
 def test_refine_marker_body_reduces_layout_error():
-    """TODO: write this test.
-
+    """
     Hint: define a body, place it in front of a tracker, measure how far the
     nominal layout is from body.get_actual_marker_positions() (ground truth,
     allowed in a test) up to a rigid transform, refine, and show the
@@ -137,7 +136,6 @@ def test_estimate_base_frame_on_synthetic_data():
 
 
 def test_planned_poses_are_visible_and_within_limits():
-    """TODO: write this test for your plan_calibration_poses."""
     rob = simulation.create_robot("rob", Frame.eye(), seed=0)
     R_tracker = Rot(matrix=np.column_stack([[0, 1, 0], [0, 0, -1], [-1, 0, 0]]))
     p_tracker = vct3(2500, 0, 300)
@@ -191,8 +189,7 @@ def test_improved_inv_kins_round_trip():
 
 
 def test_fit_recovers_synthetic_parameters():
-    """TODO: write this test.
-
+    """
     Hint: generate CalibrationData from your own model with a known,
     non-zero parameter vector (no noise), fit from zero, and check that
     predict_in_tracker agrees with the generating model on new poses. Note that

@@ -16,8 +16,6 @@ from scipy.optimize import least_squares
 
 class ImprovedKinematics(Robot):
     """
-    TODO: implement -- the core deliverable.
-
     A Robot whose fwd_kins / inv_kins account for the calibrated error
     model. You choose the parameterization; the handout's error model is
         theta*_k = theta_k + delta_theta_k,sys(theta_k)   (all joints; ||.|| <= delta_sys, slope <= omega_sys)
@@ -54,26 +52,21 @@ class ImprovedKinematics(Robot):
 
     def initial_params(self) -> np.ndarray:
         """
-        TODO: implement.
-
         output: the parameter vector that makes this model identical to the
                 nominal kinematics with base frame F_X_init -- with the
                 layout in the class docstring that is simply
                 np.zeros(6 + 10 + 6 + 6 * self.n_poly)
         """
+        n_params = 6+10+6+6*self.n_poly
         # base-frame correction: we start with by assuming F_X_nom is correct so params[0:6]=0
         # axis tilts: we start by assuming nominal joint axes are correct so params [6:16]=0
         # tool-frame correction: we start by assuming nominal F_we is correct so params[16:22]=0
         # per-joint distortion polynomial coefficients: we start with by assuming that there is no distortion beyond home offsets so params[22:]=0
-        
-        n_params = 6+10+6+6*self.n_poly
         return np.zeros(n_params)
 
 
     def base_frame(self, params: Optional[np.ndarray] = None) -> Frame:
         """
-        TODO: implement.
-
         output: F_X (robot base relative to the tracker) for params (default:
                 self.params) -- e.g. F_X_init * Exp(params[0:6]), see
                 uFrame.perturb / uncertainty_networks.se3.exp_se3
@@ -134,9 +127,6 @@ class ImprovedKinematics(Robot):
     def fwd_kins(self, theta, params: Optional[np.ndarray] = None) -> Frame:
         """
         ImprovedFwdKins(theta).
-
-        TODO: implement.
-
         input: theta - 6 encoder joint values; params - defaults to self.params
         output: F_ee relative to the robot base frame, with the calibrated
                 error model (joint offsets + distortion, tilted axes, tool
@@ -145,12 +135,9 @@ class ImprovedKinematics(Robot):
         if params is None:
             params = self.params
 
-        #corrects thetas using per-joint distortion polynomial coefficients
-        #delta_theta_k,sys = offset_k + sum_j c_k,j (theta_k / scale_k)^j
         theta = np.asarray(theta, dtype=np.float64).reshape(6)
         theta_real = theta.copy()
-        #bounds are already stored in theta_min and theta_max attribute of robot which this class inherits
-        joint_scales = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max))
+        joint_scales = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max)) #bounds are already stored in theta_min and theta_max attribute of robot which this class inherits
 
         for k in range(6):
             #systematic error initialized at home offsets which we set joint_offsets to in init() 
@@ -161,7 +148,8 @@ class ImprovedKinematics(Robot):
                 idx = POLY_COEFF_PARAMS_IDX_OFFSET + k * self.n_poly + j
                 if idx >= len(params): #just to make sure we don't overflow params
                     break
-                #we are told to scale theta values "scale_k" because we have a big difference in values between the mm theta params and radians theta params
+                #corrects thetas using per-joint distortion polynomial coefficients # we are told to scale theta values "scale_k" because we have a big difference in values between the mm theta params and radians theta params
+                #delta_theta_k,sys = offset_k + sum_j c_k,j (theta_k / scale_k)^j#
                 correction += pow(theta[k] / joint_scales[k], j+1) * params[idx] #j+1 because we already added constant term (j=0) from joint_offset 
 
             theta_real[k] += correction
@@ -246,8 +234,6 @@ class ImprovedKinematics(Robot):
 
     def residuals(self, params: np.ndarray, data: CalibrationData) -> np.ndarray:
         """
-        TODO: implement.
-
         input: params - candidate parameter vector; data - CalibrationData
         output: flat residual vector comparing predict_in_tracker(theta_j,
                 params) with data.frames[j] for every sample (choose how to
@@ -293,8 +279,6 @@ class ImprovedKinematics(Robot):
 
     def fit(self, data: CalibrationData, **kwargs):
         """
-        TODO: implement.
-
         Non-linear least squares over the parameters (scipy.optimize is
         allowed). Must set self.params. Return whatever diagnostics you want
         to report (final cost, iterations, ...).
@@ -309,7 +293,7 @@ class ImprovedKinematics(Robot):
         # after fitting the params we save them so all other functions use them by default
         self.params = result.x.copy()
 
-        # return useful information for notebook (labels from least_squares.py comments)
+        # finally we return useful information for notebook (labels from least_squares.py comments)
         return {
             "Success (convergence criteria satisfied?)": result.success,
             "Value of the cost function at the solution": result.cost,
@@ -319,8 +303,6 @@ class ImprovedKinematics(Robot):
 
     def jacobian_rank_report(self, data: CalibrationData, params: Optional[np.ndarray] = None) -> dict:
         """
-        TODO: implement.
-
         Numerically differentiate residuals w.r.t. params and report the
         singular values (and which parameter directions are poorly
         determined). Use it to justify your parameterization and your
@@ -332,10 +314,8 @@ class ImprovedKinematics(Robot):
 
         #we need residuals to tell us needed size of Jacobian
         residuals = self.residuals(params, data)
+        J = np.zeros((len(residuals), len(params))) # jacobian intiialization
 
-        #find jacobian
-        J = np.zeros((len(residuals), len(params)))
-        
         h = 1e-6  # small perturbation
 
         # we numerically differentiate each param direction by changing 1 param at a time and seeing how residuals change
@@ -353,9 +333,8 @@ class ImprovedKinematics(Robot):
 
         # SVD singular values tell us which parameter directions are observable
         U, singular_values, Vt = np.linalg.svd(J, full_matrices=False)
-
-        # standard numerical rank threshold
-        rank = np.linalg.matrix_rank(J)
+        
+        rank = np.linalg.matrix_rank(J) # standard numerical rank threshold
 
         return {
             "rank": int(rank),
@@ -367,8 +346,6 @@ class ImprovedKinematics(Robot):
 
     def parameters_report(self) -> Dict[str, np.ndarray]:
         """
-        TODO: implement.
-
         The handout (method 1 (e)) asks your program to report the updated
         kinematic parameters in physical terms, and your debugging runs to
         compare them with ground truth (rob.ground_truth_parameters()).
@@ -395,10 +372,7 @@ class ImprovedKinematics(Robot):
         poly_coeffs = params[22:].reshape(6, self.n_poly)
 
         # same scaling used in fwd_kins
-        joint_theta_scale = np.maximum(
-            np.abs(self.theta_min),
-            np.abs(self.theta_max)
-        )
+        joint_theta_scale = np.maximum(np.abs(self.theta_min), np.abs(self.theta_max))
 
         # linear part of our correction model
         joint_scale = np.ones(6)

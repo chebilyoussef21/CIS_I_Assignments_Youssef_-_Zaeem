@@ -35,8 +35,6 @@ class CalibrationData:
 
 def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     """
-    TODO: implement.
-
     HomeRobot() drives the robot to theta* = 0 and returns the encoder
     values there, i.e. -delta_theta_sys(home) - delta_theta_rnd. Repeat it
     and average to estimate the systematic joint offsets at home (after the
@@ -63,7 +61,6 @@ def measure_home_offsets(rob: Robot, n_homings: int = 5) -> np.ndarray:
     return delta_theta_sys
 
 def append_joint_sweep(poses, joint_index, joint_min, joint_max, spacing, rob, trk, mbee_local_positions):
-
     # iterations w.r.t range and spacing making sure spacing is never exceeded
     for i in range(int(np.ceil((joint_max - joint_min) / spacing)) + 1):
 
@@ -88,14 +85,12 @@ def append_joint_sweep(poses, joint_index, joint_min, joint_max, spacing, rob, t
         if trk.is_visible(marker_workspace_positions):
             poses.append(theta)
 
-    # return to home after finishing this joint sweep
+    # we return to home after finishing this joint sweep
     poses.append(np.zeros(6))
 
 # this should contain a desired accuracy which will affect the number of calibration poses
 def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[vct3], desired_accuracy: float, **kwargs) -> List[np.ndarray]:
     """
-    TODO: implement -- this is a design task.
-
     Choose the joint vectors the robot will visit during calibration to reach the desired accuracy. Every
     parameter of your kinematic model must be excited by the data (axis
     tilts need travel along each axis; the wrist axes and F_we need wrist
@@ -133,21 +128,16 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
     # TRANSLATIONAL JOINTS
     # theta 1
     append_joint_sweep(poses=poses, joint_index=0, joint_min=0, joint_max=600, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
-
     # theta 2
     append_joint_sweep(poses=poses, joint_index=1, joint_min=-300, joint_max=300, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
-
     # theta 3
     append_joint_sweep(poses=poses, joint_index=2, joint_min=0, joint_max=600, spacing=spacing_mm, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
 
     # ROTATIONAL JOINTS
-
     # theta 4
     append_joint_sweep(poses=poses, joint_index=3, joint_min=-0.75*np.pi, joint_max=0.75*np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
-
     # theta 5
     append_joint_sweep(poses=poses, joint_index=4, joint_min=-0.75*np.pi, joint_max=0.75*np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
-
     # theta 6
     append_joint_sweep(poses=poses, joint_index=5, joint_min=-np.pi, joint_max=np.pi, spacing=spacing_rad, rob=rob, trk=trk, mbee_local_positions=mbee_local_positions)
 
@@ -157,8 +147,6 @@ def plan_calibration_poses(rob: Robot, trk: Tracker, mbee_local_positions: List[
 def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
                              thetas: List[np.ndarray], repeats: int = 1) -> CalibrationData:
     """
-    TODO: implement.
-
     Visit each joint vector with rob.move_joints, read the calibration body
     with sample_marker_bodies and store its frame relative to the tracker.
     Decide what to do when the body is not visible (None), and whether/how
@@ -195,24 +183,21 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
 
             # get the most recent measured frame of the calibration body which was stored in sample_marker_bodies fct
             F_ee = mbee_placed.body.observed_frame
-            # None means the calibration body was not visible
+            # None means the calibration body was not visible. If not None (visible) we store the frames in observed_frames vector which we'll average later
             if F_ee is not None:
-                # store the joint vector for thetas and the measured EE frame for frames entry of data
+                observed_frames.append(F_ee)
                 # data.thetas.append(theta.copy())
                 # data.frames.append(F_ee)
-                observed_frames.append(F_ee)
-                #break
-
-        # if every reading failed, skip this calibration pose
+                # #break
+                
+        # if every reading failed, we skip this calibration pose
         if len(observed_frames) != 0:
-            #if length = 1 (only observation) no need to average 
-            if len(observed_frames) == 1:
+            if len(observed_frames) == 1: #if length = 1 (only observation) no need to average 
                 F_ee_avg = observed_frames[0]
-            # average repeated noisy tracker observations
-            else:
+            else: # we take the average of the repeated noisy tracker observations
                 F_ee_avg = average_frames(observed_frames)
 
-            # store the joint vector for thetas and the measured EE frame for frames entry of data
+            # finally we store the joint vector for thetas and the measured EE frame for frames entry of data
             data.thetas.append(theta.copy())
             data.frames.append(F_ee_avg)
 
@@ -220,8 +205,6 @@ def collect_calibration_data(rob: Robot, trk: Tracker, mbee_placed: PlacedBody,
 
 def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
     """
-    TODO: implement.
-
     With the calibration body's frame being exactly F_ee, every sample
     satisfies  F_ee,j = F_X * kins.fwd_kins(theta_j)  for one constant
     unknown F_X (the robot base expressed in the tracker's frame). Estimate
@@ -245,15 +228,12 @@ def estimate_base_frame(data: CalibrationData, kins: Robot) -> Frame:
         # end effector pose predicted relative to the robot base
         F_ee_robot = kins.fwd_kins(theta)
 
-        # F_ee_measured = F_X * F_ee_robot
-        # so F_X = F_ee_measured * inv(F_ee_robot)
+        # F_ee_measured = F_X * F_ee_robot so F_X = F_ee_measured * inv(F_ee_robot)
         F_X = F_ee_measured * F_ee_robot.inv()
 
         F_X_estimates.append(F_X)
 
-    # all samples estimate the same base frame, so average them
+    # all samples estimate the same base frame, so we average them
     F_X_avg = average_frames(F_X_estimates)
 
     return F_X_avg
-    
-    raise NotImplementedError("TODO: implement estimate_base_frame")

@@ -7,7 +7,7 @@ from typing import Dict, Sequence, Tuple
 import numpy as np
 
 from data_types.nominal_types import Frame
-
+from scipy.spatial.transform import Rotation as Rot
 
 def frame_error(F_a: Frame, F_b: Frame) -> Tuple[float, float]:
     """
@@ -31,10 +31,10 @@ def frame_error(F_a: Frame, F_b: Frame) -> Tuple[float, float]:
     p = np.array([dF.p.x, dF.p.y, dF.p.z])
 
     # rotation angle from the relative rotation matrix
-    cos_angle = (np.trace(R) - 1) / 2
-    cos_angle = np.clip(cos_angle, -1.0, 1.0)
-    angle_rad = np.arccos(cos_angle)
-
+    # cos_angle = (np.trace(R) - 1) / 2
+    # cos_angle = np.clip(cos_angle, -1.0, 1.0)
+    # angle_rad = np.arccos(cos_angle)
+    angle_rad = Rot.from_matrix(R).magnitude()
     # magnitude of translational error
     dist_mm = np.linalg.norm(p)
 

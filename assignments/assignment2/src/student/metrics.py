@@ -7,7 +7,6 @@ from typing import Dict, Sequence, Tuple
 import numpy as np
 
 from data_types.nominal_types import Frame
-
 from scipy.spatial.transform import Rotation
 
 def frame_error(F_a: Frame, F_b: Frame) -> Tuple[float, float]:

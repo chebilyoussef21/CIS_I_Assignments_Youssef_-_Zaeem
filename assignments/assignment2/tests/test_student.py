@@ -138,8 +138,19 @@ def test_estimate_base_frame_on_synthetic_data():
 
 def test_planned_poses_are_visible_and_within_limits():
     """TODO: write this test for your plan_calibration_poses."""
-
-    pytest.skip("TODO")
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    R_tracker = Rot(matrix=np.column_stack([[0, 1, 0], [0, 0, -1], [-1, 0, 0]]))
+    p_tracker = vct3(2500, 0, 300)
+    F_tracker_approx = Frame(R_tracker, p_tracker)
+    trk = simulation.create_tracker("trk", F_tracker_approx, seed=0)
+    DESIRED_ACCURACY = 0.001 
+    mbee_local_positions = [vct3(0, 0, 0), vct3(50, 0, 0), vct3(0, 50, 0), vct3(0, 0, 50)]
+    poses = workflow.plan_calibration_poses(rob, trk, mbee_local_positions, DESIRED_ACCURACY) 
+    for p in poses:
+        assert rob.within_limits(p)
+        F_tool = rob.fwd_kins(p)
+        marker_positions = [F_tool * m for m in mbee_local_positions]
+    assert trk.is_visible(marker_positions)
 
 
 def test_measure_home_offsets_matches_encoders():
@@ -188,13 +199,30 @@ def test_fit_recovers_synthetic_parameters():
     the parameters themselves need not match if your model has a null
     direction -- compare poses, not parameters.
     """
-    rng = np.random.default_rng(42)
-
+    rng = np.random.default_rng(0)
+    N_CALIBRATION_POSES = 50
+    N_TEST_POSES = 25
     rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+    original_params_kinematics = kinematics.ImprovedKinematics(rob, Frame.eye())
+    radian_dist = np.random.default_rng(42).uniform(-0.003, 0.003, size=original_params_kinematics.params.shape)
+    translation_dist = np.random.default_rng(43).uniform(-0.1, 0.1, size=original_params_kinematics.params.shape)
 
-    # 1. Define a model that generates our synthetic observations.
-    generator = kinematics.ImprovedKinematics(rob, Frame.eye())
+    # As different parameters are on different scales we selectively apply values for distribution based on parameter type
+    for param in range(len(original_params_kinematics.params)): 
+        if param < 3 or 7 <= param < 19:  # Base rotation, axis tilts, and tool rotation
+            original_params_kinematics.params[param] = radian_dist[param]
+        elif 3 <= param < 6 or 19 <= param < 22:  # Base and tool translations
+            original_params_kinematics.params[param] = translation_dist[param]
+        elif param == 6:  # Unused parameter due to gauge fixing
+            original_params_kinematics.params[param] = 0.0
+        else:  # Joint encoder distortion coefficients
+            joint = (param - 22) // 2 # get the joint index (0, 1, 2, 3, 4) for the encoder distortion parameters
+            if joint < 3:
+                original_params_kinematics.params[param] = rng.uniform(-0.01, 0.01)
+            else:
+                original_params_kinematics.params[param] = rng.uniform(-1e-5, 1e-5)
 
+<<<<<<< HEAD
     # 2. Choose known, nonzero calibration parameters.
     generator.params[7] = 0.005      # Joint 2 axis tilt (rad)
     generator.params[22] = 0.04      # Joint 1 encoder correction (mm)
@@ -207,13 +235,26 @@ def test_fit_recovers_synthetic_parameters():
     for _ in range(60):
         theta = random_theta(rng)
         observed_frame = generator.predict_in_tracker(theta)
+=======
+    calibration_data = workflow.CalibrationData()  # using new parameters to generate synthetic calibration data
+    for _ in range(N_CALIBRATION_POSES):
+        theta = random_theta(rng)
+        observed_frame = original_params_kinematics.predict_in_tracker(theta, original_params_kinematics.params)
+        calibration_data.thetas.append(theta.copy())
+        calibration_data.frames.append(observed_frame)
+>>>>>>> 7f2af672833b87e14be6b2febf088dbe94686824
 
-        data.thetas.append(theta.copy())
-        data.frames.append(observed_frame)
+    blind = kinematics.ImprovedKinematics(rob, Frame.eye()) # the blind model we will fit to the data, starting from zero parameters
+    result = blind.fit(calibration_data)
 
-    # 4. Initialize a different model with zero corrections.
-    fitted = kinematics.ImprovedKinematics(rob, Frame.eye())
+    for test_theta in [random_theta(rng) for _ in range(N_TEST_POSES)]:  # compare poses from the original and fitted models using frame error
+        expected_frame = original_params_kinematics.predict_in_tracker(test_theta, original_params_kinematics.params)
+        predicted_frame = blind.predict_in_tracker(test_theta)
+        angle_error, position_error = metrics.frame_error(expected_frame, predicted_frame)
+        assert angle_error < 1e-5
+        assert position_error < 1e-3
 
+<<<<<<< HEAD
     result = fitted.fit(data) #recover corrections with fit function
 
     # 6. Test fitted model on NEW joint configurations.
@@ -227,4 +268,7 @@ def test_fit_recovers_synthetic_parameters():
 
         assert angle < 1e-5
         assert position < 1e-3
+=======
+
+>>>>>>> 7f2af672833b87e14be6b2febf088dbe94686824
 

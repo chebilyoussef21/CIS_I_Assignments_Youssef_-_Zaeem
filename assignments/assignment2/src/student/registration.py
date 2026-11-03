@@ -130,7 +130,7 @@ def refine_marker_body(trk: Tracker, placed: PlacedBody, n_readings: int = 30) -
         raise ValueError("We need sensor readings and finite amount of passes to do refinement")
    
     # current estimate of marker positions in the marker-body frame
-    a = placed.body.marker_positions
+    a = placed.body.nominal_marker_positions
 
     # there are multiple readings for a single marker, so we will sum them up and then average them to get a refined reading of the marker position
     # sum_point = {} 

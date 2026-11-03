@@ -87,7 +87,36 @@ def test_refine_marker_body_reduces_layout_error():
     allowed in a test) up to a rigid transform, refine, and show the
     distance shrank. Also check how much simulated time it cost.
     """
-    pytest.skip("TODO")
+
+    mb_positions = [vct3(0, 0, 0), vct3(60, 0, 0), vct3(0, 60, 0), vct3(0, 0, 60)]
+    body = simulation.define_marker_body("mb", mb_positions)
+    trk = simulation.create_tracker("trk", Frame(Rot(), vct3(0, 0, -1600)), seed=5)
+    placed = simulation.place_marker_body(body, Frame(Rot('z', 0.3), vct3(100, 50, 0)))
+    simulation.add_marker_bodies(trk, [placed])
+
+    # ground truth marker positions in the body frame (allowed in a test)
+    actual_positions = [a.p for a in body.get_actual_marker_positions()]
+
+    def layout_error(layout): # rms distance between a layout and the true markers, after the best rigid fit
+        F = registration.register_points(layout, actual_positions)
+        return np.sqrt(np.mean([(F * a - b).norm() ** 2 for a, b in zip(layout, actual_positions)]))
+
+    # calculate error before refinement
+    error_before = layout_error(body.nominal_marker_positions)
+
+    # now we do the refine_marker_body function and time how long it took in simulated time
+    t_start = simulation.clock.elapsed
+    refined = registration.refine_marker_body(trk, placed, n_readings=30)
+    t_cost = simulation.clock.elapsed - t_start
+
+    # calculate error after refinement
+    error_after = layout_error(body.nominal_marker_positions)
+
+    # the refined layout is stored on the body and is closer to the truth
+    assert all(np.allclose(r.vec, n.vec) for r, n in zip(refined, body.nominal_marker_positions))
+    assert error_after < 0.5 * error_before
+    # each reading costs delta_t_samp of simulated time
+    assert np.isclose(t_cost, 30 * simulation.constants.SAMPLE_DELTA_T_SEC)
 
 
 # ---------------------------------------------------------------- workflow
@@ -109,6 +138,7 @@ def test_estimate_base_frame_on_synthetic_data():
 
 def test_planned_poses_are_visible_and_within_limits():
     """TODO: write this test for your plan_calibration_poses."""
+
     pytest.skip("TODO")
 
 
@@ -158,6 +188,43 @@ def test_fit_recovers_synthetic_parameters():
     the parameters themselves need not match if your model has a null
     direction -- compare poses, not parameters.
     """
-    
+    rng = np.random.default_rng(42)
 
-    pytest.skip("TODO")
+    rob = simulation.create_robot("rob", Frame.eye(), seed=0)
+
+    # 1. Define a model that generates our synthetic observations.
+    generator = kinematics.ImprovedKinematics(rob, Frame.eye())
+
+    # 2. Choose known, nonzero calibration parameters.
+    generator.params[7] = 0.005      # Joint 2 axis tilt (rad)
+    generator.params[22] = 0.04      # Joint 1 encoder correction (mm)
+    generator.params[28] = 0.002     # Joint 4 encoder correction (rad)
+    generator.params[19] = 0.10      # Tool-frame translation (mm)
+
+    # 3. Construct synthetic calibration data.
+    data = workflow.CalibrationData()
+
+    for _ in range(60):
+        theta = random_theta(rng)
+        observed_frame = generator.predict_in_tracker(theta)
+
+        data.thetas.append(theta.copy())
+        data.frames.append(observed_frame)
+
+    # 4. Initialize a different model with zero corrections.
+    fitted = kinematics.ImprovedKinematics(rob, Frame.eye())
+
+    result = fitted.fit(data) #recover corrections with fit function
+
+    # 6. Test fitted model on NEW joint configurations.
+    for _ in range(20):
+        theta = random_theta(rng)
+
+        expected = generator.predict_in_tracker(theta)
+        predicted = fitted.predict_in_tracker(theta)
+
+        angle, position = metrics.frame_error(expected, predicted)
+
+        assert angle < 1e-5
+        assert position < 1e-3
+

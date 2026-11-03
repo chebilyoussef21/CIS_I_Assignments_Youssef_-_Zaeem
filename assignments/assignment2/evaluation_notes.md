@@ -115,3 +115,38 @@ For this run, `collect_calibration_data` takes all `repeats` readings at each po
 | 10 | 2.22e-4 | 3.55e-4 | 0.082 | 0.116 | 4.80e-4 | 0.108 | 415.2 | True |
 
 All ten seeds now meet both targets, for both forward and inverse kinematics. Across all seeds, the worst forward angle error is 3.6e-4 rad (about a third of the 1e-3 target) and the worst forward position error is 0.140 mm (target 0.2 mm). The worst inverse errors are 6.4e-4 rad and 0.115 mm. Averaging 10 readings cut the forward errors roughly in half compared with run 3, which confirms that the failures in run 3 came from tracker noise and not from the model. The extra readings cost only about 17 s of calibration time (415 s against 398 s), well within the 900 s budget. Inverse kinematics is now noticeably worse than forward on angle (about 4–6e-4 rad against 2–4e-4 rad). That gap is the robot's own random jitter (`sigma_rnd`) on each real move, which no calibration can remove, so it acts as a floor for the inverse result.
+
+## Fix: more accurate angle in `metrics.frame_error`
+
+The test `test_improved_inv_kins_round_trip` failed with `assert 2.1073424255447017e-08 < 1e-08` on the angle check, while the position check passed. The kinematics were not the problem. The problem was how `frame_error` measured the angle.
+
+`frame_error` used to get the angle from the rotation matrix with `arccos((trace(R) - 1) / 2)`. When two frames are almost the same, the value inside `arccos` should be exactly 1.0, but the computer can be off by the smallest possible step (about 2.2e-16). Near 1, `arccos` is very steep, so a tiny change in its input becomes a much larger change in its output.
+
+### How we found it
+
+The clue came from the error output of the failed test:
+
+```
+>           assert metrics.frame_error(F, F_back)[0] < 1e-8
+E           assert 2.1073424255447017e-08 < 1e-08
+..\tests\test_student.py:150: AssertionError
+```
+
+Index `[1]` of `frame_error` (the position error) had already passed its check on the line before, so `inv_kins` was returning the right pose. Only index `[0]` (the angle) failed, and only by a small amount. That made us suspect that the angle calculation in `frame_error` was the problem, not the kinematics.
+
+To check this, we ran these lines in a notebook cell:
+
+```python
+import numpy as np
+np.arccos(1.0)
+np.arccos(1.0 - 1e-16)
+np.arccos(1.0 - 2.2e-16)
+```
+
+The cell printed `2.1073424255447017e-08`. A notebook cell only shows the result of its last line, so this is `arccos(1 - 2.2e-16)`. It is exactly the same number as in the failed test. This confirmed the cause: the two frames were really the same, but the smallest possible rounding error in `cos_angle` (2.2e-16) turned into 2.1e-8 rad after `arccos`. So `arccos` cannot report any angle smaller than about 2e-8 rad, even when the true error is zero, and the test asks for less than 1e-8.
+
+### The fix
+
+We replaced those lines with `Rotation.from_matrix(R).magnitude()` from `scipy.spatial.transform`. It gets the angle from a quaternion instead of from `arccos`, which stays accurate for very small angles. With this change the round-trip test passes.
+
+This does not change any of the results in runs 1–4. Those errors are around 1e-4 rad or larger, which is far above the 2e-8 rad limit, so the old `arccos` version measured them correctly. The fix only matters when two frames are almost exactly the same, as in the round-trip test.

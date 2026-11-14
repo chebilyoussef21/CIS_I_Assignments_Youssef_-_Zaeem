@@ -4,6 +4,7 @@ from typing import Tuple
 
 import numpy as np
 
+from assignments.assignment3.tests.test_student import mesh
 from data_types.nominal_types import vct3
 from ..mesh import Mesh
 
@@ -54,4 +55,11 @@ def closest_points_on_mesh(points: np.ndarray, mesh: Mesh) -> Tuple[np.ndarray, 
     input: points (K,3) in CT coordinates, mesh
     output: closest (K,3), triangle index (K,), distance (K,)
     """
-    raise NotImplementedError("TODO: implement closest_points_on_mesh")
+    ct_triangle_vertices = mesh.tri_vertices()
+    closest_points = np.zeros((points.shape[0], 3))
+    for point in points:
+        closest_points = np.array([closest_point_on_triangle(point, ct_triangle_vertices[i][0], ct_triangle_vertices[i][1], ct_triangle_vertices[i][2]) for i in range(ct_triangle_vertices.shape[0])]) 
+        distances = np.linalg.norm(closest_points - point, axis=1)
+        closest_index = np.argmin(distances)
+    return closest_points[closest_index], closest_index, distances[closest_index]
+    #raise NotImplementedError("TODO: implement closest_points_on_mesh")

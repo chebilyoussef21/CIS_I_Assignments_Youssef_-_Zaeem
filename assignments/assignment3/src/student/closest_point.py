@@ -62,4 +62,5 @@ def closest_points_on_mesh(points: np.ndarray, mesh: Mesh) -> Tuple[np.ndarray, 
         distances = np.linalg.norm(closest_points - point, axis=1)
         closest_index = np.argmin(distances)
     return closest_points[closest_index], closest_index, distances[closest_index]
+
     #raise NotImplementedError("TODO: implement closest_points_on_mesh")

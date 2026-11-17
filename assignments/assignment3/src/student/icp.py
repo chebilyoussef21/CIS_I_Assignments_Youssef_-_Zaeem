@@ -28,6 +28,7 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     input: paired points a_i, b_i (>= 3)
     output: least-squares Frame F with F * a_i ~= b_i
     """
+    
     raise NotImplementedError("TODO: implement register_points")
 
 
@@ -37,6 +38,8 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
     input: {patch id: (n_i,3) tip points in reference coordinates}, the patch boxes
     output: a rough F_reg (reference -> CT) from patch centroids <-> box centres
     """
+    
+
     raise NotImplementedError("TODO: implement coarse_registration")
 
 

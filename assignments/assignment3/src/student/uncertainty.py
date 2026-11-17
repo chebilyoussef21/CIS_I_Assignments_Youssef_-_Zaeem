@@ -16,8 +16,11 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
     input: IcpResult, the initial guess F0_reg
     output: mu (6,) estimate of eta_reg, C_reg (6,6) covariance of delta
     """
-    raise NotImplementedError("TODO: implement registration_covariance")
-
+    #take in initial guess of F_reg
+    F_reg_star = np.exp() * result.F_reg 
+    mu = 
+    eta_reg = 
+    C_reg = 
 
 def predicted_tre(mesh: Mesh, F_reg: Frame, C_reg: np.ndarray) -> dict:
     """
@@ -25,4 +28,9 @@ def predicted_tre(mesh: Mesh, F_reg: Frame, C_reg: np.ndarray) -> dict:
     input: mesh, estimated F_reg, C_reg (6,6)
     output: {"rms", "mean", "max", "p90"} of the predicted TRE over the mesh vertices
     """
-    raise NotImplementedError("TODO: implement predicted_tre")
+
+    return {
+        "rms": int(r.size), 
+        "mean": float(r.mean()), 
+        "max": float(r.max()),
+        "p90": float(np.percentile(r, 90))}

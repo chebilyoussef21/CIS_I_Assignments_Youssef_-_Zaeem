@@ -52,32 +52,30 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
     input: {patch id: (n_i,3) tip points in reference coordinates}, the patch boxes
     output: a rough F_reg (reference -> CT) from patch centroids <-> box centres
     """
-    assert len(d_by_patch) == len(boxes)
-    box_centres = np.array([box.p for box in boxes])
-    average_R = np.zeros((3, 3))
-    average_translation = np.zeros(3)
+    # assert len(d_by_patch) == len(boxes)
+
+    reference_centroids = []
+    box_centroids = []
+
     reference_centroids = np.zeros((len(d_by_patch), 3))
     box_centroids = np.zeros((len(d_by_patch), 3))
+
     for patch_id, tip_points in d_by_patch.items():
-        tip_point_centroid = np.mean(tip_points, axis=0)
-        box_centroid = box_centres[patch_id]
-        reference_centroids[patch_id] = tip_point_centroid
-        box_centroids[patch_id] = box_centroid
+        # tip_point_centroid = np.mean(tip_points, axis=0)
+        tip_point_centroid = np.median(tip_points, axis=0)
+        box_center = boxes[patch_id].p
+        box_centroid = np.asarray(box_center).reshape(3)
+        # box_centroid = np.asarray(tip_point_centroid = np.mean(tip_points, axis=0))
+
+        # reference_centroids[patch_id] = tip_point_centroid
+        # box_centroids[patch_id] = box_centroid
+        reference_centroids.append(tip_point_centroid)
+        box_centroids.append(box_centroid)
+
+    reference_centroids = np.asarray(reference_centroids)
+    box_centroids = np.asarray(box_centroids)
+
     return register_points(reference_centroids, box_centroids)
-    """"
-        reference_centroids[patch_id] = tip_point_centroid
-        box_centroids[patch_id] = box_centroid
-    overall_reference_centroid = np.mean(reference_centroids, axis=0)
-    overall_box_centroid = np.mean(box_centroids, axis=0)
-    translation_removed_reference_centroids = reference_centroids - overall_reference_centroid
-    translation_removed_box_centroids = box_centroids - overall_box_centroid
-    U, S, Vt = np.linalg.svd(np.dot(translation_removed_reference_centroids.T, translation_removed_box_centroids))
-    diag = np.eye(3)
-    diag[2, 2] = np.linalg.det(np.dot(Vt.T, U.T))
-    R = np.matmul(np.matmul(Vt.T,diag),U.T)
-    translation_ = box_centroid - np.matmul(R, tip_point_centroid)
-    return Frame(R, translation_)
-    """
 
 def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: float = 1e-4,
         reject: Optional[str] = "mad") -> IcpResult:

@@ -98,7 +98,7 @@ def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: floa
         #    break
         inliers = np.ones_like(residuals, dtype=bool)
         if reject == "mad":
-            cutoff = np.median(residuals) + 3 * np.median(np.abs(residuals - np.median(residuals))) # CHANGE DIS
+            cutoff = np.median(residuals) + 3 *1.4826 * np.median(np.abs(residuals - np.median(residuals))) # CHANGE DIS
             outliers = residuals > cutoff
             inliers = ~outliers
 

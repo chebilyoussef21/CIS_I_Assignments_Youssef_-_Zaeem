@@ -106,7 +106,7 @@ def collect_samples(session: Session, plan: List[int]) -> SampleSet:
 
         sample_set.handles.append(handle)
         sample_set.patch_ids.append(patch_id)
-        sample_set.d_ref.append(d_k)
+        sample_set.d_ref.append(d_k.vec.ravel()) #we convert vct3 to np array to prevent error in notebook 
 
     sample_set.t_collect = session.elapsed() - t_start
 
@@ -122,28 +122,27 @@ def run_registration(session: Session, mesh: Mesh, boxes: List[PatchBox], **kwar
     """
     t_wall_start = time.perf_counter()
     t_simulated_start = session.elapsed() 
+
     n_patches = 46          #copied from value chosen in notebook template 
     samples_per_patch = 4   #copied from value chosen in notebook template 
+
     plan = plan_patches(boxes, n_patches, samples_per_patch)
+
     samples_by_patch = collect_samples(session, plan)
-    F_init = coarse_registration(samples_by_patch, boxes)
+
+    d = samples_by_patch.as_array()
+    by_patch = {}
+    for pid, dk in zip(samples_by_patch.patch_ids, d):
+        by_patch.setdefault(pid, []).append(dk)
+    F_init = coarse_registration({k: np.array(v) for k, v in by_patch.items()}, boxes)
+
     result = icp(d=samples_by_patch.as_array(), mesh=mesh, F_init=F_init, max_iter= 100, tol= 1e-4, reject= "mad") #reject attribute optional defaults to 'mad'
+    
     t_simulated = session.elapsed() - t_simulated_start
+
     mu, C_reg = registration_covariance(result=result, F0_reg=F_init)
+
     TRE = predicted_tre(mesh=mesh, F_reg=result.F_reg, C_reg=C_reg)
-    t_wall = time.perf_counter() - t_wall_start
-    return RegistrationReport(
-        F_reg = result.F_reg,
-        patches = boxes,
-        samples = samples_by_patch,
-        residual_stats = result.residuals,
-        t_simulated = t_simulated,
-        t_wall = t_wall,
-        n_icp_iterations = result.n_iter,
-        converged = result.converged,
-        eta_reg = mu,
-        predicted_tre = TRE
-    )
 
     # sample report
     samples_report = []

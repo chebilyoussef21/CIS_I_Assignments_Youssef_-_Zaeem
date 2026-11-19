@@ -23,7 +23,7 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
     #extract components of Frame object to construct 4x4 matrix T
     delta_T = np.eye(4)
     delta_T[:3, :3] = delta_F.R.matrix
-    delta_T[:3, 3] = np.asarray(delta_F.p).reshape(3)
+    delta_T[:3, 3] = np.asarray(delta_F.p.vec.ravel())
     #mu = log(delta) = estimate of eta_reg
     mu = np.asarray(log_se3(delta_T)).reshape(6)
 
@@ -35,8 +35,10 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
 
     # point_to_plane_jacobian = normals.transpose() @ [-exp_se3(points), np.eye(3)]
     #1 row for each sampled closest point, 6 columns: each column gives us the change (derivative) of the residual r_i w.r.t one of the 6 components of eta
-    point_to_point_jacobian = np.zeros((len(closest_points), 6)) 
+    # point_to_point_jacobian = np.zeros((len(closest_points), 6)) 
     # point_to_plane_jacobian = np.zeros((len(closest_points), 6)) 
+    point_to_point_rows = []
+    point_to_plane_rows = []
     N_samples = len(closest_points)
     for k in range(N_samples):
         c_i = closest_points[k] 
@@ -47,8 +49,12 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
             [x_k[2],  0, -x_k[0]],
             [-x_k[1], x_k[0],  0]
         ])
-        point_to_point_jacobian[k, :] = np.hstack((-skew_x_k, np.eye(3)))
-        point_to_plane_jacobian = n_i @ point_to_point_jacobian
+        J_k = np.hstack((-skew_x_k, np.eye(3)))   # (3,6)
+        point_to_point_rows.append(J_k)           
+        # point_to_plane_rows.append(n_i @ J_k)  
+
+    point_to_point_jacobian = np.vstack(point_to_point_rows)   # (3N, 6)
+    # point_to_plane_jacobian = np.array(point_to_plane_rows)    # (N, 6)
 
     A = point_to_point_jacobian
     # A = point_to_plane_jacobian
@@ -59,7 +65,7 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
     # Residual variance
     # if len(closest_points) <= 6: #EDGE CASE
     #     raise ValueError("Need more than 6 inlier samples to estimate registration covariance.")
-    DOF = max(N_samples - 6, 1) #degrees of freedom 
+    DOF = max(A.shape[0] - 6, 1) #degrees of freedom 
     residual_variance = np.sum(np.power(residuals,2)) / DOF
 
     #2nd : Residual covariance from registration

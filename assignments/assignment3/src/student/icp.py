@@ -39,9 +39,8 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     U, S, Vt = np.linalg.svd(np.dot(translation_removed_a.T, translation_removed_b))
     diag = np.eye(3)
     diag[2, 2] = np.linalg.det(np.dot(Vt.T, U.T))
-    X = np.matmul(V.T,U.T)
-    R = X
-    if np.linalg.det(X) == -1:
+    R = np.matmul(Vt.T,U.T)
+    if np.linalg.det(R) < 0: #== -1: we use <0 because sometimes determinant values come out as -0.9999... instead of -1
         R = np.matmul(np.matmul(Vt.T,diag),U.T)
     translation_ = b_centroid - np.matmul(R, a_centroid)
     return Frame(R, translation_)
@@ -62,6 +61,8 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
     for patch_id, tip_points in d_by_patch.items():
         tip_point_centroid = np.mean(tip_points, axis=0)
         box_centroid = box_centres[patch_id]
+        reference_centroids[patch_id] = tip_point_centroid
+        box_centroids[patch_id] = box_centroid
     return register_points(reference_centroids, box_centroids)
     """"
         reference_centroids[patch_id] = tip_point_centroid
@@ -91,7 +92,8 @@ def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: floa
     rms_history = []
 
     for iteration in range(max_iter):
-        registration_guess = (F_@d.T).T
+        # registration_guess = (F_@d.T).T
+        registration_guess = d @ F_.R.matrix.T + F_.p.vec.ravel()        
         closest_points,_,_ = closest_points_on_mesh(registration_guess, mesh)
         residuals = np.linalg.norm(registration_guess- closest_points, axis=1)
         #if np.mean(residuals) < tol:
@@ -116,14 +118,15 @@ def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: floa
         F_ = register_points(d_inliers, closest_inliers)
  
         
-    registration_guess_final = (F_@d.T).T
+    # registration_guess_final = (F_@d.T).T
+    registration_guess_final = d @ F_.R.matrix.T + F_.p.vec.ravel()
     closest_final, triangle_indexes_final, _ = closest_points_on_mesh(registration_guess_final, mesh)
     final_residuals = np.linalg.norm(registration_guess_final - closest_final, axis=1)
-    final_inliers = np.ones_like(residuals, dtype=bool)
+    final_inliers = np.ones_like(final_residuals, dtype=bool)
     if reject == "mad":
-        cutoff = np.median(residuals) + 3 * np.median(np.abs(residuals - np.median(residuals))) # CHANGE DIS
-        final_inliers = residuals < cutoff
+        cutoff = np.median(final_residuals) + 3 * 1.4826 * np.median(np.abs(final_residuals - np.median(final_residuals)))
+        final_inliers = final_residuals <= cutoff
     
     normal_final = mesh.face_normals[triangle_indexes_final]
 
-    return IcpResult(F_reg=F_,residuals=final_residuals, inlier_mask=final_inliers, closest=closest_final, normals=normal_final, n_iter=iteration+1, converged=converged_check)   
+    return IcpResult(F_reg=F_,residuals=final_residuals, inlier_mask=final_inliers, closest=closest_final, normals=normal_final, n_iter=iteration+1, converged=converged_check, history=rms_history)   

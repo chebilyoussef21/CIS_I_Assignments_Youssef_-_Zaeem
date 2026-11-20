@@ -120,11 +120,91 @@ def test_report_round_trip(tmp_path):
     assert "Valid samples (1)" in back.to_text()
 
 
-# ---------------------------------------------------------------- TODO: yours
+# ---------------------------------------------------------------- 
+from src.student import closest_point, icp, uncertainty, report, workflow   # add workflow to the existing line
+from src.session import Tracker
+from uncertainty_networks.se3 import log_se3
 
-def test_registration_covariance_is_consistent():
-    pytest.skip("TODO: check that eta_true is within the predicted covariance (Mahalanobis ~ chi2_6)")
+BOX_FILE = Path(__file__).resolve().parents[1] / "data" / "box-centroids-rotations-world.json"
+
+def test_registration_covariance_is_consistent(mesh, surface_points):
+    """check that eta_true is within the predicted covariance (Mahalanobis ~ chi2_6)"""
+    # if C_reg is the right size, the true registration error eta_true measured with C_reg
+    # (mahalanobis distance eta^T C^-1 eta) should follow a chi-squared distribution with 6 DOF
+    rng = np.random.default_rng(5)
+    NOISE_MM = 0.25      # random noise value added to every surface sample
+    N_TRIALS = 10
+    CHI2_6_95 = 12.59    # 95% quantile of chi-squared with 6 DOF
+    # CHI2_6_95 = scipy.stats.chi2.ppf(0.95, 6)
+
+    mahalanobis_distances = []
+    for trial in range(N_TRIALS):
+        F_true = random_frame(rng, angle=0.5, dist=20.0)
+        noisy_points = surface_points + rng.normal(scale=NOISE_MM, size=surface_points.shape)
+        d = apply(F_true.inv(), noisy_points)  # samples in reference coordinates
+        F_init = Frame(Rot(vct3(0, 0, 1), angle=0.05), vct3(1, -1, 1)) * F_true
+        result = icp.icp(d, mesh, F_init, max_iter=100)
+        mu, C_reg = uncertainty.registration_covariance(result, F_init)
+
+        # true error with the left/CT convention: F_true = Exp(eta_true) * F_reg
+        delta_F = F_true * result.F_reg.inv()
+        delta_T = np.eye(4)
+        delta_T[:3, :3] = delta_F.R.matrix
+        delta_T[:3, 3] = delta_F.p.vec.ravel()
+        eta_true = np.asarray(log_se3(delta_T)).reshape(6)
+
+        mahalanobis = float(eta_true @ np.linalg.pinv(C_reg) @ eta_true)
+        mahalanobis_distances.append(mahalanobis)
+
+    # median of chi2_6 is ~5.3, so a correctly sized C_reg keeps the median well under the 95% quantile
+    assert np.median(mahalanobis_distances) < CHI2_6_95
 
 
 def test_patch_plan_keeps_bodies_visible():
-    pytest.skip("TODO: check every planned patch keeps pointer and reference inside the frustum")
+    """check every planned patch keeps pointer and reference inside the frustum using the patch box's rotation as it is"""
+    boxes = load_patch_boxes(BOX_FILE)
+    design = workflow.design_scene()
+    frustum = Tracker("frustum", design.F_tracker_approx)
+    plan = workflow.plan_patches(boxes, len(boxes), 1)
+
+    #first we make sure that reference body's markers are visible before anything
+    assert frustum.is_visible(design.ref_marker_positions)
+
+    # if that works then for each patch in the plan, we put the pointer tip on each planned box centre (pointer z axis = box normal)
+    # and then we check that the ptr markers are inside the tracker frustum
+    for patch_id in plan:
+        box = boxes[patch_id]
+        F_ptr = Frame(box.R, box.p - box.R @ design.p_tip.vec.ravel())   # so that F_ptr * p_tip = box centre
+        assert frustum.is_visible([F_ptr * a for a in design.ptr_marker_positions]), f"patch {patch_id} not visible"
+
+def test_patch_plan_keeps_bodies_visible_realistic(mesh):
+    """same check as function above but in this version we flip axis if it points inwards such that the ptr always sticks out of the bone like irl"""
+    boxes = load_patch_boxes(BOX_FILE)
+    design = workflow.design_scene()
+    frustum = Tracker("frustum", design.F_tracker_approx)
+    plan = workflow.plan_patches(boxes, len(boxes), 1)
+    
+    mesh_centre = mesh.vertices.mean(axis=0)
+    invisible_patches = []
+    for patch_id in set(plan):
+        box = boxes[patch_id]
+        # the box z axis can point into the bone, so we flip it to point away from the mesh centre
+        if box.normal @ (box.p - mesh_centre) > 0:
+            outward_normal = box.normal
+        else:
+            outward_normal = -box.normal
+        x_axis = box.R[:, 0]
+        y_axis = np.cross(outward_normal, x_axis)
+        R_ptr = np.column_stack([x_axis, y_axis, outward_normal])
+        p_ptr = box.p - R_ptr @ design.p_tip.vec.ravel()  # F_ptr * p_tip = box centre
+        F_ptr = Frame(R_ptr, p_ptr)
+
+        pointer_markers = [F_ptr * a for a in design.ptr_marker_positions]
+        if not frustum.is_visible(pointer_markers):
+            invisible_patches.append(patch_id)
+
+    reference_markers = [Frame(Rot(), vct3(0, 0, 0)) * a for a in design.ref_marker_positions]
+    assert frustum.is_visible(reference_markers)
+    assert invisible_patches == [], f"pointer not visible on patches {invisible_patches}"
+
+

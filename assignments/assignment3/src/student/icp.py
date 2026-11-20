@@ -62,8 +62,8 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
     # box_centroids = np.zeros((len(d_by_patch), 3))
 
     for patch_id, tip_points in d_by_patch.items():
-        # tip_point_centroid = np.mean(tip_points, axis=0)
-        tip_point_centroid = np.median(tip_points, axis=0)
+        tip_point_centroid = np.mean(tip_points, axis=0)
+        # tip_point_centroid = np.median(tip_points, axis=0)
         box_center = boxes[patch_id].p
         box_centroid = np.asarray(box_center).reshape(3)
         # box_centroid = np.asarray(tip_point_centroid = np.mean(tip_points, axis=0))

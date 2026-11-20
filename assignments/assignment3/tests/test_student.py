@@ -207,4 +207,34 @@ def test_patch_plan_keeps_bodies_visible_realistic(mesh):
     assert frustum.is_visible(reference_markers)
     assert invisible_patches == [], f"pointer not visible on patches {invisible_patches}"
 
+@pytest.mark.parametrize("vertex", [vct3(0, 0, 0),vct3(10, 0, 0),vct3(0, 10, 0),])
+def test_closest_point_on_triangle_query_is_exactly_at_vertex(vertex):
+    vertex_a, vertex_b, vertex_c = vct3(0, 0, 0), vct3(10, 0, 0), vct3(0, 10, 0)
+    should_be_same_as_vertex = closest_point.closest_point_on_triangle(vertex, vertex_a, vertex_b, vertex_c)
+    assert np.allclose(should_be_same_as_vertex.vec.ravel(), vertex.vec.ravel())
 
+def test_register_points_fixes_reflec_to_a_rot():
+    rng_seed = 5
+    rng = np.random.default_rng(rng_seed)
+    a = rng.normal(size=(10, 3))
+    reflection = np.diag([-1.0, 1.0, 1.0])
+    b = a @ reflection.T
+    F_est = icp.register_points(a, b)
+    R = F_est.R.matrix
+    assert np.allclose(R.T @ R, np.eye(3), atol=1e-9)
+    assert np.isclose(np.linalg.det(R), 1.0, atol=1e-9)
+
+from src.mesh import Mesh # we needa create our own mesh to create an equidistant example
+def test_closest_points_on_mesh_returns_min_under_tie():
+    vertices = np.array([
+        [-1, -1,  1], [1, -1,  1], [0, 1,  1],  # triangle 0
+        [-1, -1, -1], [1, -1, -1], [0, 1, -1],  # triangle 1: tied minimum
+        [-1, -1,  3], [1, -1,  3], [0, 1,  3],  # triangle 2: farther away
+    ], dtype=float)
+    triangles = np.array([[0, 1, 2],[3, 4, 5],[6, 7, 8],])
+    mesh_ = Mesh(vertices=vertices, triangles=triangles)
+    point_for_tie = np.array([[0, 0, 0]], dtype=float)  # equidistant to triangle 0 and 1
+    closest, triangle_index, distance = closest_point.closest_points_on_mesh(point_for_tie, mesh_)
+    assert np.isclose(distance[0], 1.0)
+    assert triangle_index[0] == 0  
+    assert np.allclose(closest[0], [0, 0, 1])

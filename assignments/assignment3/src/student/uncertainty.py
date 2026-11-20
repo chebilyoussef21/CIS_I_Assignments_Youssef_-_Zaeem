@@ -7,12 +7,17 @@ import numpy as np
 from data_types.nominal_types import Frame
 from ..mesh import Mesh
 from .icp import IcpResult
-from uncertainty_networks.se3 import  log_so3, exp_se3, log_se3, exp_so3
+from uncertainty_networks.se3 import  log_se3
 
+def skew(x):
+    return np.array([
+            [0, -x[2],  x[1]],
+            [x[2],  0, -x[0]],
+            [-x[1], x[0],  0]
+        ])
 
 def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarray, np.ndarray]:
     """
-    TODO: implement.
     Left/CT convention: F*_reg = Exp(delta) . F_reg, eta_reg = [alpha; eps] relative to F0_reg.
     input: IcpResult, the initial guess F0_reg
     output: mu (6,) estimate of eta_reg, C_reg (6,6) covariance of delta
@@ -37,34 +42,30 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
     #1 row for each sampled closest point, 6 columns: each column gives us the change (derivative) of the residual r_i w.r.t one of the 6 components of eta
     # point_to_point_jacobian = np.zeros((len(closest_points), 6)) 
     # point_to_plane_jacobian = np.zeros((len(closest_points), 6)) 
-    point_to_point_rows = []
+    # point_to_point_rows = []
     point_to_plane_rows = []
     N_samples = len(closest_points)
     for k in range(N_samples):
         c_i = closest_points[k] 
         x_k = c_i ## approximation x_k ~= c_i bcs x_k = result.F_reg * d but we dont have d so no other choice
         n_i = normals[k]
-        skew_x_k = np.array([
-            [0, -x_k[2],  x_k[1]],
-            [x_k[2],  0, -x_k[0]],
-            [-x_k[1], x_k[0],  0]
-        ])
-        J_k = np.hstack((-skew_x_k, np.eye(3)))   # (3,6)
-        point_to_point_rows.append(J_k)           
-        # point_to_plane_rows.append(n_i @ J_k)  
+        skew_x_k = skew(x_k)
+        J_k = np.hstack((-skew_x_k, np.eye(3))) 
+        # point_to_point_rows.append(J_k)           
+        point_to_plane_rows.append(n_i @ J_k)  
 
-    point_to_point_jacobian = np.vstack(point_to_point_rows)   # (3N, 6)
-    # point_to_plane_jacobian = np.array(point_to_plane_rows)    # (N, 6)
+    # point_to_point_jacobian = np.vstack(point_to_point_rows)   
+    point_to_plane_jacobian = np.array(point_to_plane_rows)
 
-    A = point_to_point_jacobian
-    # A = point_to_plane_jacobian
+    # A = point_to_point_jacobian
+    A = point_to_plane_jacobian
 
-    # if np.linalg.matrix_rank(A) < 6: #EDGE CASE
-    #     raise ValueError("Registration geometry is degenerate.")
+    if np.linalg.matrix_rank(A) < 6: #EDGE CASE
+        raise ValueError("Registration geometry is not full rank.")
 
     # Residual variance
-    # if len(closest_points) <= 6: #EDGE CASE
-    #     raise ValueError("Need more than 6 inlier samples to estimate registration covariance.")
+    if len(closest_points) <= 6: #EDGE CASE
+        raise ValueError("We need more than 6 inlier samples to estimate registration covariance.")
     DOF = max(A.shape[0] - 6, 1) #degrees of freedom 
     residual_variance = np.sum(np.power(residuals,2)) / DOF
 
@@ -75,7 +76,6 @@ def registration_covariance(result: IcpResult, F0_reg: Frame) -> Tuple[np.ndarra
 
 def predicted_tre(mesh: Mesh, F_reg: Frame, C_reg: np.ndarray) -> dict:
     """
-    TODO: implement.
     input: mesh, estimated F_reg, C_reg (6,6)
     output: {"rms", "mean", "max", "p90"} of the predicted TRE over the mesh vertices
     """
@@ -86,11 +86,7 @@ def predicted_tre(mesh: Mesh, F_reg: Frame, C_reg: np.ndarray) -> dict:
     for k in range(len(vertices_from_mesh)):
         x_k = vertices_from_mesh[k]
 
-        skew_x_k = np.array([
-                    [0, -x_k[2],  x_k[1]],
-                    [x_k[2],  0, -x_k[0]],
-                    [-x_k[1], x_k[0],  0]
-                ])
+        skew_x_k = skew(x_k)
         # A_i = np.array([-skew_x, np.eye(3)])
         A_k = np.hstack((-skew_x_k, np.eye(3)))
         C_x = A_k @ C_reg @ A_k.transpose() 

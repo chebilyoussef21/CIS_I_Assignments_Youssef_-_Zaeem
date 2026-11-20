@@ -11,10 +11,15 @@ from .report import RegistrationReport
 
 from .icp import coarse_registration, icp, IcpResult
 from .uncertainty import predicted_tre, registration_covariance
-from data_types.nominal_types import Frame
-from src import vct3, Rot, Frame
+from data_types.nominal_types import Frame, vct3, Rot
 
 import time
+
+#constants for run_registation() function
+ICP_MAX_ITERATIONS = 100
+ICP_TOLERANCE = 1e-4
+N_PATCHES = 46          #copied from value chosen in notebook template 
+SAMPLES_PER_PATCH = 4   #copied from value chosen in notebook template 
 
 @dataclass
 class SampleSet:
@@ -97,10 +102,11 @@ def collect_samples(session: Session, plan: List[int]) -> SampleSet:
         handle = session.place_pointer(patch_id)
         observations = session.sample_marker_bodies()
         #if one of bodies isn't visible we skip the sample
+        if observations["ref"] is None or observations["ptr"] is None: 
+            print(f"skipped sample on patch {patch_id}: marker body not visible")
+            continue
         F_ref = observations["ref"].frame
         F_ptr = observations["ptr"].frame
-        if F_ref is None or F_ptr is None: 
-            continue
         # Pointer-tip position expressed in reference-body coordinates
         d_k = F_ref.inv() * F_ptr * session.design.p_tip         #ptip*=ptip so no uncertainty
 
@@ -123,10 +129,7 @@ def run_registration(session: Session, mesh: Mesh, boxes: List[PatchBox], **kwar
     t_wall_start = time.perf_counter()
     t_simulated_start = session.elapsed() 
 
-    n_patches = 46          #copied from value chosen in notebook template 
-    samples_per_patch = 4   #copied from value chosen in notebook template 
-
-    plan = plan_patches(boxes, n_patches, samples_per_patch)
+    plan = plan_patches(boxes, N_PATCHES, SAMPLES_PER_PATCH)
 
     samples_by_patch = collect_samples(session, plan)
 
@@ -136,11 +139,11 @@ def run_registration(session: Session, mesh: Mesh, boxes: List[PatchBox], **kwar
         by_patch.setdefault(pid, []).append(dk)
     F_init = coarse_registration({k: np.array(v) for k, v in by_patch.items()}, boxes)
 
-    result = icp(d=samples_by_patch.as_array(), mesh=mesh, F_init=F_init, max_iter= 100, tol= 1e-4, reject= "mad") #reject attribute optional defaults to 'mad'
+    result = icp(d=samples_by_patch.as_array(), mesh=mesh, F_init=F_init, max_iter= ICP_MAX_ITERATIONS, tol= ICP_TOLERANCE, reject= "mad") #reject attribute optional defaults to 'mad'
     
     t_simulated = session.elapsed() - t_simulated_start
 
-    mu, C_reg = registration_covariance(result=result, F0_reg=F_init)
+    mu, C_reg = registration_covariance(result=result, F0_reg=session.initial_registration_guess())
 
     TRE = predicted_tre(mesh=mesh, F_reg=result.F_reg, C_reg=C_reg)
 

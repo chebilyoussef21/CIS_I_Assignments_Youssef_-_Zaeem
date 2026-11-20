@@ -5,10 +5,9 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from assignments.assignment3.src.student.closest_point import closest_points_on_mesh
+from .closest_point import closest_points_on_mesh, convert_to_N_by_3_array
 from data_types.nominal_types import vct3, Frame
 from ..mesh import Mesh, PatchBox
-
 
 @dataclass
 class IcpResult:
@@ -25,13 +24,16 @@ class IcpResult:
 
 def register_points(a: List[vct3], b: List[vct3]) -> Frame:
     """
-    TODO: implement (your own; do not call the simulator's solver).
     input: paired points a_i, b_i (>= 3)
     output: least-squares Frame F with F * a_i ~= b_i
     """
     assert len(a) == len(b) and len(a) >= 3
-    a = np.asarray(a)
-    b = np.asarray(b)
+    # a = np.asarray(a)
+    # b = np.asarray(b)
+    #EDGE CASE : register_points gets called with 2 different kinds of input so we need to handle both
+    a = convert_to_N_by_3_array(a)
+    b = convert_to_N_by_3_array(b)
+
     a_centroid = np.mean(a, axis=0)
     b_centroid = np.mean(b, axis=0)
     translation_removed_a = a - a_centroid
@@ -48,7 +50,6 @@ def register_points(a: List[vct3], b: List[vct3]) -> Frame:
 
 def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]) -> Frame:
     """
-    TODO: implement.
     input: {patch id: (n_i,3) tip points in reference coordinates}, the patch boxes
     output: a rough F_reg (reference -> CT) from patch centroids <-> box centres
     """
@@ -80,7 +81,6 @@ def coarse_registration(d_by_patch: Dict[int, np.ndarray], boxes: List[PatchBox]
 def icp(d: np.ndarray, mesh: Mesh, F_init: Frame, max_iter: int = 100, tol: float = 1e-4,
         reject: Optional[str] = "mad") -> IcpResult:
     """
-    TODO: implement.
     input: d (K,3) tip points in reference coordinates, mesh, initial F_reg,
            iteration cap, convergence tolerance, outlier-rejection method
     output: IcpResult
